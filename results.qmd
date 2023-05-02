@@ -1,0 +1,237 @@
+---
+title: "Experiment 3"
+author: "Tom Mushkat"
+format: 
+   html:
+    code-fold: true
+    code-tools: true
+editor: visual
+---
+
+```{r}
+pacman::p_load(here, doSPSS, tidyverse, ez, psych)
+```
+
+```{r, warning=FALSE,message=FALSE}
+raw_data <- read_csv(here('Data//data for prep.csv'))
+sub_data <- read_csv(here('Data//sub data.csv'))
+
+```
+
+```{r, warning=FALSE,message=FALSE}
+data <- raw_data %>% 
+  left_join(sub_data, by = 'Q1')
+
+data$...293 <- NULL
+
+data[data == "7\nVery much"] <- "7"
+data[data == "Very much"] <- "7"
+data[data == "1\nNot at all"] <- "1"
+
+
+# write.csv(data, 'testData.csv')
+
+data <- data %>% 
+  filter(Attention == 'Maybe' 
+           & Honesty == 'Yes, I put in a reasonable effort' 
+           & Disturbances == 'No' 
+           & Alone == 'Alone' 
+           & Consecutively == 'Yes') %>% 
+  mutate(duration_minutes = doSPSS::sdOutliers(duration_minutes)) %>% 
+  drop_na(duration_minutes)
+
+data <- data %>% 
+  mutate(across(c(Competent_1, Competent_2
+                  , Intelligent_1, Intelligent_2
+                  , Educated_1, Educated_2
+                  , Professional_1, Professional_2
+                  , Experienced_1, Experienced_2
+                  , Qualified_1, Qualified_2
+                  , Helpful_1, Helpful_2
+                  , Sincere_1, Sincere_2
+                  , Honest_1, Honest_2
+                  , Just_1, Just_2
+                  , Unselfish_1, Unselfish_2
+                  , Fair_1, Fair_2
+                  , Moral_1, Moral_2
+                  , Ethical_1, Ethical_2
+                  , Responsible_1, Responsible_2
+                  , Considerate_1, Considerate_2), as.numeric)
+                )
+
+
+  
+```
+
+```{r, warning=FALSE,message=FALSE}
+data <- 
+data %>% 
+  mutate(Expertise_1 = rowMeans(cbind(Competent_1
+                                      , Intelligent_1
+                                      , Educated_1
+                                      , Professional_1
+                                      , Experienced_1
+                                      , Qualified_1))
+         , Expertise_2 = rowMeans(cbind(Competent_2
+                                      , Intelligent_2
+                                      , Educated_2
+                                      , Professional_2
+                                      , Experienced_2
+                                      , Qualified_2))
+         , Integrity_1 = rowMeans(cbind(Helpful_1
+                                      , Sincere_1
+                                      , Honest_1
+                                      , Just_1))
+         , Integrity_2 = rowMeans(cbind(Helpful_2
+                                      , Sincere_2
+                                      , Honest_2
+                                      , Just_2))
+         , Benevolance_1 = rowMeans(cbind(Unselfish_1
+                                      , Fair_1
+                                      , Moral_1
+                                      , Ethical_1
+                                      , Responsible_1
+                                      , Considerate_1))
+          , Benevolance_2 = rowMeans(cbind(Unselfish_2
+                                      , Fair_2
+                                      , Moral_2
+                                      , Ethical_2
+                                      , Responsible_2
+                                      , Considerate_2))) %>% 
+  mutate(Dr_expertise   = if_else(Dr_position == 'First', Expertise_1, Expertise_2),
+         Dr_integrity   = if_else(Dr_position == 'First', Integrity_1, Integrity_2),
+         Dr_benevolance = if_else(Dr_position == 'First', Benevolance_1, Benevolance_2),
+         Lay_expertise   = if_else(Dr_position == 'First', Expertise_2, Expertise_1),
+         Lay_integrity   = if_else(Dr_position == 'First', Integrity_2, Integrity_1),
+         Lay_benevolance = if_else(Dr_position == 'First', Benevolance_2, Benevolance_1)) %>% 
+  mutate(gap_expertise = Dr_expertise - Lay_expertise,
+         gap_integrity = Dr_integrity - Lay_integrity,
+         gap_benevolance = Dr_benevolance - Lay_benevolance) %>% 
+  mutate(select_doctor = if_else(Complaience %in% c('Dr. Richard Green', 'Dr. James Wood'), 'select_doctor',
+                                 if_else(Complaience == 'Neither', Complaience, 'select_layperson')),
+         answer_position = paste0(Dr_position, Dr_answer))
+
+
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+
+
+data_expertise <- data %>% 
+  select(StartDate
+         , duration_minutes
+         , Q1
+         , Age
+         , Gender
+         , full_condition
+         , Dr_name
+         , Dr_answer
+         , Dr_position
+         , gap_expertise
+         , Dr_expertise
+         , Lay_expertise
+         ) %>% 
+  tidyr::gather(source_identity, measurement, Dr_expertise:Lay_expertise, factor_key = FALSE)
+ 
+
+data_integrity <- data %>% 
+  select(StartDate
+         , duration_minutes
+         , Q1
+         , Age
+         , Gender
+         , full_condition
+         , Dr_name
+         , Dr_answer
+         , Dr_position
+         , gap_integrity
+         , Dr_integrity
+         , Lay_integrity
+         ) %>% 
+  tidyr::gather(source_identity, measurement, Dr_integrity:Lay_integrity, factor_key = FALSE) 
+
+
+data_benevolance <- data %>% 
+  select(StartDate
+         , duration_minutes
+         , Q1
+         , Age
+         , Gender
+         , full_condition
+         , Dr_name
+         , Dr_answer
+         , Dr_position
+         , gap_benevolance
+         , Dr_benevolance
+         , Lay_benevolance) %>% 
+  tidyr::gather(source_identity, measurement, Dr_benevolance:Lay_benevolance, factor_key = FALSE) 
+
+
+
+```
+# Expertise_1
+```{r, warning=FALSE, message=FALSE}
+
+data <- data %>% 
+  mutate(source_identity_first = if_else(Dr_position == 'First', 'Dr', 'Layperson'))
+twoWay(data$Expertise_1, data$Dr_answer, data$source_identity_first)
+
+
+m <- aov(Expertise_1 ~ Dr_answer * source_identity_first, data = data)
+m_car <- car::Anova(m, type = 3, white.adjust = T)
+m_ez <- ez::ezANOVA(data = data, dv = Expertise_1, wid = Q1, between = c(Dr_answer, source_identity_first), type = 3, return_aov = TRUE, detailed = FALSE,  white.adjust = T)
+indttest(data$Expertise_1, data$Dr_answer)
+# data %>% 
+#   ggplot(aes(x = Dr_answer , y = Expertise_1, fill = source_identity_first)) +
+# geom_violin(alpha = 0) +
+#    ggplot2::stat_summary(fun.data = "mean_cl_normal",  conf.int = .95, geom = "errorbar", color = "red", width = 0.2, size = 1, position = position_dodge(0.9)) +
+#     ggplot2::stat_summary(fun = mean, geom = "bar", alpha = 0.2, position = position_dodge(0.9)) +
+#     # ggplot2::ylab('METI')  +
+#     ggplot2::theme_bw() +
+#   ylim(1, 10) +
+#   scale_y_continuous(breaks = seq(from = 1, to = 10, by = 1)) +
+#   theme(axis.text.x = element_text(size = 30),
+#         axis.text.y = element_text(size = 30),
+#         axis.title.x = element_text(size = 30),
+#         axis.title.y = element_text(size = 30),
+#         legend.text = element_text(size = 30),
+#         legend.title = element_text(size = 30)
+#         )
+# 
+# data %>% 
+#   group_by(Dr_answer, source_identity_first) %>% 
+#   summarise(M = round(mean(Expertise_1, na.rm = T), 2)
+#             , SD = round(sd(Expertise_1, na.rm = T), 2)
+#             , N = length(Expertise_1))
+# 
+# 
+ez::ezANOVA(data = data, dv = Expertise_1, wid = Q1, between = c(Dr_answer, source_identity_first), type = 3, return_aov = TRUE, detailed = FALSE)
+# 
+# 
+# m <- twoWay(data$Expertise_1, data$Dr_answer, data$source_identity_first)
+# m$Post_hoc_IDV1
+# m$Post_hoc_IDV2
+# m$Post_hoc_Interaction
+
+```
+
+# Integrity_1
+```{r, warning=FALSE, message=FALSE}
+
+
+
+  
+  twoWay(data$Integrity_1, data$Dr_answer, data$source_identity_first)
+```
+
+# Benevolance_1
+```{r, warning=FALSE, message=FALSE}
+
+
+  twoWay(data$Benevolance_1, data$Dr_answer, data$source_identity_first)
+
+
+```
+
+
